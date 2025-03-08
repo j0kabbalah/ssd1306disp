@@ -23,6 +23,7 @@ use signal_hook::{
     iterator::Signals,
 };
 use ssd1306::{prelude::*, I2CDisplayInterface, Ssd1306};
+use procfs::{Current, LoadAverage};
 
 mod bme280_sysfs;
 use bme280_sysfs::BME280;
@@ -47,8 +48,8 @@ fn main() -> Result<()> {
     message_display(&mut display, text_style, "Welcome")?;
     sleep(Duration::from_secs(5));
 
-    let period = Duration::from_secs(1);
-    let timeout = Duration::from_millis(10);
+    let period = Duration::from_millis(200);
+    let timeout = Duration::from_millis(1);
     let mut ptime = Instant::now();
 
     // check signals
@@ -66,6 +67,7 @@ fn main() -> Result<()> {
             main_display(&bme280, &mut display, text_style)?;
             ptime = Instant::now();
         }
+        sleep(Duration::from_millis(1));
     }
 
     message_display(&mut display, text_style, "Good Bye")?;
@@ -83,7 +85,7 @@ fn clear_screen(
         ssd1306::mode::BufferedGraphicsMode<DisplaySize128x64>,
     >,
 ) -> Result<()> {
-    display.clear();
+    display.clear(BinaryColor::Off).map_err(|e| Error::from(e))?;
     display.flush().map_err(|e| Error::from(e))?;
     Ok(())
 }
@@ -98,7 +100,7 @@ fn message_display(
     text_style: embedded_graphics::mono_font::MonoTextStyle<'_, BinaryColor>,
     text: &str,
 ) -> Result<()> {
-    display.clear();
+    display.clear(BinaryColor::Off).map_err(|e| Error::from(e))?;
 
     let maxsize = Size::new(
         DisplaySize128x64::WIDTH as u32,
@@ -140,7 +142,11 @@ fn main_display(
     let temp = format!("Temperature: {:3.2}C", bme280.temperature()?);
     let humi = format!("Humidity: {:3.2}%RH", bme280.humidity()?);
     let pres = format!("Pressure: {:3.2}hPa", bme280.pressure()?);
-    display.clear();
+
+    let la_val = LoadAverage::current().map_err(|e| Error::from(e))?;
+    let la = format!("LA: {:3.2}/{:3.2}/{:3.2}", la_val.one, la_val.five, la_val.fifteen);
+
+    display.clear(BinaryColor::Off).map_err(|e| Error::from(e))?;
 
     Text::with_baseline(&time, Point::new(1, 1), text_style, Baseline::Top)
         .draw(display)
@@ -155,6 +161,9 @@ fn main_display(
         .draw(display)
         .map_err(|e| Error::from(e))?;
     Text::with_baseline(&pres, Point::new(1, 45), text_style, Baseline::Top)
+        .draw(display)
+        .map_err(|e| Error::from(e))?;
+    Text::with_baseline(&la, Point::new(1, 56), text_style, Baseline::Top)
         .draw(display)
         .map_err(|e| Error::from(e))?;
 

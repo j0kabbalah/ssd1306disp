@@ -1,6 +1,7 @@
 use anyhow::anyhow;
 use display_interface::DisplayError;
-use std::fmt::Display;
+use procfs::ProcError;
+use std::{fmt::Display, path::PathBuf};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -50,4 +51,34 @@ impl From<DisplayError> for Error {
         let source = anyhow!(msg.clone());
         Error { msg, source }
     }
+}
+
+impl From<ProcError> for Error {
+    fn from(value: ProcError) -> Self {
+        let err = match value {
+            ProcError::Incomplete(path) => {
+                let spath = pathbuf_to_string(path);
+                format!("Incomplete: at {}", spath)
+            }
+            ProcError::InternalError(err) => format!("InternalError: {}", err),
+            ProcError::Io(err, path) => {
+                let spath = pathbuf_to_string(path);
+                format!("IO: {} at {}", err, spath)
+            }
+            ProcError::NotFound(path) => {
+                let spath = pathbuf_to_string(path);
+                format!("NotFound: at {}", spath)
+            }
+            ProcError::Other(msg) => format!("Other: {}", msg),
+            _ => "unknown".to_owned(),
+        };
+        let msg = "ProcError: ".to_owned() + &err;
+        let source = anyhow!(msg.clone());
+        Error { msg, source }
+    }
+}
+
+fn pathbuf_to_string(path: Option<PathBuf>) -> String {
+    path.map(|p| p.into_os_string().into_string().unwrap_or("???".to_owned()))
+        .unwrap_or("---".to_owned())
 }
